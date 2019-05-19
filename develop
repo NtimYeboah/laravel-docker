@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+
+# Set environment variables for dev or CI
+export APP_PORT=${APP_PORT:-80}
+export DB_PORT=${DB_PORT:-3306}
+export DB_ROOT_PASS=${DB_ROOT_PASS:-secret}
+export DB_NAME=${DB_NAME:-homestead}
+export DB_USER=${DB_USER:-root}
+export DB_PASS=${DB_PASS:-secret}
+
+# Decide which docker-compose file to use
+COMPOSE_FILE="dev"
+
+# Enable pseudo-TTY
+TTY=""
+
+if [ ! -z "$BUILD_NUMBER" ]; then
+    COMPOSE_FILE="ci"
+    TTY="-T" # But disable pseudo-TTY for CI (Jenkins)
+fi
+
+COMPOSE="docker-compose -f docker-compose.$COMPOSE_FILE.yml"
+
+if [ $# -gt 0 ]; then
+    if [ "$1" == "artisan" ]; then
+        shift 1
+        $COMPOSE run --rm $TTY -w /var/www/html app php artisan "$@"
+
+    # If "composer" is used, pass-through to "composer" inside a new container
+    elif [ "$1" == "composer" ]; then
+        shift 1
+        $COMPOSE run --rm $TTY -w /var/www/html app php composer "$@"
+
+    # If "test" is used, run unit tests, pass-through any extra args to php-unit
+    elif [ "$1" == "test" ]; then
+        shift 1
+        $COMPOSE run --rm $TTY -w /var/www/html app php ./vendor/bin/phpunit "$@"
+
+    # If "npm" is used, run npm from the node container
+    elif [ "$1" == "npm" ]; then
+        shift 1
+        $COMPOSE run --rm $TTY -w /var/www/html app php npm "$@"
+    
+    else
+        $COMPOSE "$@"
+    fi
+else
+    $COMPOSE ps
+fi
